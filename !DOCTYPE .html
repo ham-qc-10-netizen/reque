@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte Requisición de Material - HANS & SAP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Caveat:wght@600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .font-signature {
+            font-family: 'Caveat', cursive;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Hoja de impresión / vista previa */
+        .sheet-paper {
+            width: 100%;
+            max-width: 840px;
+            min-height: 1020px;
+            box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Estilos de impresión estrictos */
+        @media print {
+            body {
+                background: #ffffff !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .no-print, #header-nav, #view-modelos, #view-almacen, #view-historial, #toast-notification, #modal-confirm-entrega {
+                display: none !important;
+            }
+            #view-reporte {
+                display: block !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .sheet-paper {
+                box-shadow: none !important;
+                border: none !important;
+                max-width: 100% !important;
+                width: 100% !important;
+                min-height: auto !important;
+                padding: 10mm 15mm !important;
+            }
+            @page {
+                size: letter portrait;
+                margin: 10mm;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col antialiased">
+
+    <!-- 1. BARRA DE NAVEGACIÓN SUPERIOR -->
+    <header id="header-nav" class="no-print bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between py-3 gap-3">
+            
+            <!-- Logos HANS y SAP -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <span class="bg-gradient-to-br from-blue-600 to-indigo-800 text-white font-black px-2.5 py-1 rounded tracking-wider text-sm shadow">HANS</span>
+                    <span class="text-slate-600 font-bold">|</span>
+                    <span class="bg-gradient-to-r from-blue-500 to-sky-500 text-white font-black px-2.5 py-1 rounded tracking-wider text-sm shadow">SAP</span>
+                </div>
+                <div class="hidden sm:block border-l border-slate-700 pl-3">
+                    <h1 class="text-sm font-bold text-slate-100 leading-tight">Reporte Requisición de Material</h1>
+                    <p class="text-[10px] text-slate-400">Control de Abastecimiento & Piso de Ensamble</p>
+                </div>
+            </div>
+
+            <!-- Navegación entre las 4 Vistas -->
+            <nav class="flex items-center bg-slate-950/70 p-1 rounded-xl border border-slate-800 gap-1 overflow-x-auto">
+                <button id="nav-btn-modelos" onclick="switchTab('modelos')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow">
+                    <i class="fa-solid fa-shapes"></i>
+                    <span>1. Modelos</span>
+                </button>
+
+                <button id="nav-btn-almacen" onclick="switchTab('almacen')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800 relative">
+                    <i class="fa-solid fa-warehouse"></i>
+                    <span>2. Pedidos Almacén</span>
+                    <span id="nav-badge-pendientes" class="hidden px-1.5 py-0.2 rounded-full bg-amber-500 text-white font-bold text-[10px]">0</span>
+                </button>
+
+                <button id="nav-btn-reporte" onclick="switchTab('reporte')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800">
+                    <i class="fa-solid fa-file-invoice"></i>
+                    <span>3. Reporte</span>
+                </button>
+
+                <button id="nav-btn-historial" onclick="switchTab('historial')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>4. Historial & Datos</span>
+                    <span id="nav-badge-historial" class="px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]">0</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- NOTIFICACIÓN TOAST FLOTANTE -->
+    <div id="toast-notification" class="no-print fixed bottom-5 right-5 z-50 bg-slate-900 text-white border border-slate-700 px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 transform translate-y-24 opacity-0 flex items-center gap-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+        <div class="text-xs">
+            <span id="toast-title" class="font-bold block">Notificación</span>
+            <span id="toast-desc" class="text-slate-300">Detalle de la acción</span>
+        </div>
+        <button onclick="hideToast()" class="text-slate-400 hover:text-white text-base ml-2">&times;</button>
+    </div>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="flex-grow w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- ========================================== -->
+        <!-- VISTA 1: MODELOS                           -->
+        <!-- ========================================== -->
+        <section id="view-modelos" class="space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 gap-3">
+                <div>
+                    <h2 class="text-xl font-extrabold text-slate-900">Selección de Modelo de Producción</h2>
+                    <p class="text-xs text-slate-500">Agregue los números de parte solicitados en MX5A o genere una prueba rápida para interactuar con el reporte.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button onclick="simularPedidoDemo()" class="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>Simular Datos de Prueba</span>
+                    </button>
+                    <div class="flex items-center gap-2 text-xs text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Solicitante: <strong class="text-slate-900">Materialista MX5A</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CUADRÍCULA DE 8 MODELOS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+                <!-- 1. TARJETA MX5A (ACTIVA Y EDITABLE) -->
+                <div class="bg-white rounded-2xl shadow-md border-2 border-blue-500/50 p-4 flex flex-col justify-between transition-all hover:shadow-lg sm:col-span-2 lg:col-span-2">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Línea Activa</span>
+                            <span id="mx5a-badge-count" class="text-xs font-mono-code font-bold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full border border-slate-200">0 Partes</span>
+                        </div>
+                        <h3 class="text-2xl font-black text-slate-900 mb-1">MX5A</h3>
+                        <p class="text-xs text-slate-500 mb-3">Ingrese manualmente los números de parte a requerir (inicia vacío sin datos precargados).</p>
+
+                        <!-- SECCIÓN DESPLEGABLE DE MATERIALES -->
+                        <div id="mx5a-expanded-section" class="hidden mb-4 border border-slate-200 rounded-xl p-3 bg-slate-50/70 space-y-3">
+                            
+                            <!-- Formulario para agregar número de parte manualmente -->
+                            <div class="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                                <span class="text-[11px] font-bold text-slate-700 block"><i class="fa-solid fa-plus-circle text-blue-600 mr-1"></i>Agregar Material a la Requisición:</span>
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                                    <input type="text" id="input-new-code" placeholder="No. Parte (ej. 2005_A24120)" class="sm:col-span-4 px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg font-mono-code focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <input type="text" id="input-new-desc" placeholder="Descripción del artículo" class="sm:col-span-5 px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                    <div class="sm:col-span-3 flex gap-1.5">
+                                        <input type="number" id="input-new-qty" min="1" value="10" placeholder="Cant." class="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg text-center font-mono-code font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                                        <button onclick="agregarParteManual()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shrink-0" title="Agregar a la lista">
+                                            <i class="fa-solid fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Buscador / Filtro -->
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                                <input type="text" id="mx5a-search-input" onkeyup="filterParts()" placeholder="Filtrar lista agregada..." class="w-full text-xs pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            </div>
+
+                            <!-- Lista de Checkboxes -->
+                            <div class="border border-slate-200 rounded-lg bg-white overflow-hidden">
+                                <div class="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex justify-between text-[10px] font-bold text-slate-500 uppercase">
+                                    <span>Sel. / Código y Descripción</span>
+                                    <span>Cant. Solicitada</span>
+                                </div>
+                                <ul id="mx5a-parts-list" class="max-h-52 overflow-y-auto custom-scrollbar divide-y divide-slate-100 p-1.5">
+                                    <li id="mx5a-empty-list" class="py-6 text-center text-slate-400 text-xs italic">
+                                        Lista vacía. Agregue un número de parte arriba o pulse "Simular Datos de Prueba".
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                                <span>Marcados: <strong id="lbl-selected-count" class="text-slate-900">0</strong></span>
+                                <span>Total Piezas: <strong id="lbl-total-pieces" class="text-blue-600 font-mono-code">0</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BOTONERA INFERIOR MX5A -->
+                    <div class="pt-3 border-t border-slate-100 space-y-2">
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="toggleCardMX5A('close')" class="py-2 text-xs font-bold rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition">
+                                Cerrar
+                            </button>
+                            <button onclick="toggleCardMX5A('toggle')" id="btn-toggle-mx5a" class="py-2 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition">
+                                Abrir
+                            </button>
+                            <button onclick="guardarSeleccionMX5A()" id="btn-save-mx5a" class="py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition">
+                                Guardar
+                            </button>
+                        </div>
+
+                        <button onclick="enviarAlmacenMX5A()" id="btn-enviar-almacen" disabled class="w-full py-2.5 text-xs font-extrabold rounded-xl bg-amber-500 text-white opacity-40 cursor-not-allowed shadow transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-paper-plane"></i>
+                            <span>Enviar a Almacén</span>
+                        </button>
+
+                        <!-- BOTÓN ENTREGADO EN LÍNEA (ACTIVO CUANDO HAY ORDEN EN CURSO) -->
+                        <div id="mx5a-delivery-box" class="hidden pt-2 border-t border-dashed border-slate-200 space-y-1.5">
+                            <div class="flex items-center justify-between text-[11px] px-1">
+                                <span class="text-slate-500 font-semibold flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                                    En curso: <strong id="lbl-active-order-id" class="text-slate-900 font-mono-code">#ORD-0001</strong>
+                                </span>
+                                <span id="lbl-active-order-status" class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">Pendiente</span>
+                            </div>
+                            <button onclick="abrirModalEntrega()" class="w-full py-2.5 text-xs font-black rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-clipboard-check text-sm"></i>
+                                <span>Confirmar Entregado (No. de Reloj)</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2 al 8: OTROS MODELOS EN ESPERA -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 02</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">NQ5A</h3>
+                        <p class="text-xs text-slate-400">Módulo configurado para arnés de carrocería.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 03</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">NEA</h3>
+                        <p class="text-xs text-slate-400">Plataforma eléctrica de alta tensión.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 04</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">MQ5A</h3>
+                        <p class="text-xs text-slate-400">Ensambles de interiores y vestiduras.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 05</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">CVA</h3>
+                        <p class="text-xs text-slate-400">Línea de corte y preparación de terminales.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 06</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">MEA</h3>
+                        <p class="text-xs text-slate-400">Módulo especial de arneses auxiliares.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 07</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">LUCID</h3>
+                        <p class="text-xs text-slate-400">Arnés de tecnología y sensores premium.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col justify-between opacity-75 hover:opacity-100 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3"><span class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-500">En Espera</span><span class="text-[10px] text-slate-400 font-mono-code">ID: 08</span></div>
+                        <h3 class="text-xl font-black text-slate-800 mb-1">MVA</h3>
+                        <p class="text-xs text-slate-400">Componentes de ventilación y soporte motor.</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5 pt-4 border-t border-slate-100">
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Cerrar</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Abrir</button>
+                        <button class="py-1.5 text-xs rounded-lg bg-slate-100 text-slate-400 cursor-not-allowed">Guardar</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VISTA 2: PEDIDOS ALMACÉN                   -->
+        <!-- ========================================== -->
+        <section id="view-almacen" class="hidden space-y-6">
+            
+            <!-- TARJETAS RESUMEN (INICIAN EN 0) -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500 font-semibold">Pendientes (Tolerancia 3m)</p>
+                        <p id="kpi-pendientes" class="text-3xl font-black text-amber-600 font-mono-code mt-1">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-clock"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500 font-semibold">En Proceso (Recolección / Tránsito)</p>
+                        <p id="kpi-proceso" class="text-3xl font-black text-blue-600 font-mono-code mt-1">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-dolly"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-500 font-semibold">Completados en Línea</p>
+                        <p id="kpi-completados" class="text-3xl font-black text-emerald-600 font-mono-code mt-1">0</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg">
+                        <i class="fa-solid fa-check-double"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TABLA DE PEDIDOS Y BARRA DE 3 TONOS DE AZUL -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between sm:items-center gap-2 bg-slate-50/60">
+                    <div>
+                        <h3 class="font-bold text-slate-900 text-base">Panel de Control de Pedidos en Tiempo Real</h3>
+                        <p class="text-xs text-slate-500">Seguimiento por fases: F1 Revisión (3 min) &rarr; F2 Recolección (+5 min) &rarr; F3 Entrega a Línea (+5 min)</p>
+                    </div>
+                    <div class="flex items-center gap-3 text-xs font-semibold">
+                        <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-sky-300"></span> F1: 3m</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-500"></span> F2: 5m</span>
+                        <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-blue-900"></span> F3: 5m</span>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 border-b border-slate-200 uppercase font-bold text-[11px]">
+                                <th class="py-3 px-4">Folio</th>
+                                <th class="py-3 px-4">Modelo</th>
+                                <th class="py-3 px-4">Partes / Piezas</th>
+                                <th class="py-3 px-4">Estatus</th>
+                                <th class="py-3 px-4 min-w-[280px]">Progreso (3 Tonos de Azul)</th>
+                                <th class="py-3 px-4 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="almacen-orders-tbody" class="divide-y divide-slate-100">
+                            <tr>
+                                <td colspan="6" class="py-10 text-center text-slate-400">
+                                    <i class="fa-solid fa-inbox text-3xl mb-2 block opacity-40"></i>
+                                    No hay pedidos registrados. Cree una solicitud en "1. Modelos".
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VISTA 3: REPORTE REQUISICIÓN DE MATERIAL   -->
+        <!-- ========================================== -->
+        <section id="view-reporte" class="hidden space-y-4">
+            
+            <!-- BARRA SUPERIOR DE HERRAMIENTAS (NO SE IMPRIME) -->
+            <div class="no-print max-w-[840px] mx-auto bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <label for="select-report-order" class="text-xs font-bold text-slate-600">Seleccionar Folio:</label>
+                    <select id="select-report-order" onchange="loadOrderInReport(this.value)" class="bg-slate-50 border border-slate-300 text-slate-900 text-xs font-mono-code font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- Sin órdenes --</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="switchTab('almacen')" class="px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition">
+                        Volver a Almacén
+                    </button>
+                    <button id="btn-print-report" onclick="ejecutarImpresionDesdeReporte()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2">
+                        <i class="fa-solid fa-print"></i>
+                        <span id="lbl-btn-print">Imprimir Reporte</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- HOJA BLANCA OFICIAL DEL REPORTE -->
+            <article id="printable-report" class="sheet-paper bg-white mx-auto p-8 sm:p-12 rounded-xl border border-slate-300 text-slate-800 flex flex-col justify-between">
+                
+                <div>
+                    <!-- HEADER CON LOGOS HANS Y SAP -->
+                    <div class="flex flex-col sm:flex-row justify-between items-center border-b-2 border-slate-900 pb-5 gap-4">
+                        <!-- Logo HANS -->
+                        <div class="flex items-center gap-2.5">
+                            <div class="bg-gradient-to-br from-blue-700 to-indigo-950 text-white font-black text-2xl px-3.5 py-1 rounded-lg shadow-sm tracking-wider">HANS</div>
+                            <div class="text-[10px] text-slate-500 leading-tight">
+                                <strong class="text-slate-900 text-xs">HANS AUTOMOTIVE</strong><br>División Ensamble de Arneses
+                            </div>
+                        </div>
+
+                        <!-- Título Central -->
+                        <div class="text-center">
+                            <h2 class="text-lg font-black uppercase tracking-wide text-slate-900">Reporte Requisición de Material</h2>
+                            <p class="text-[11px] text-slate-500 font-medium">Documento Oficial de Surtimiento y Trazabilidad en Línea</p>
+                        </div>
+
+                        <!-- Logo SAP -->
+                        <div class="flex items-center gap-2.5">
+                            <div class="text-right text-[10px] text-slate-500 leading-tight">
+                                <strong class="text-slate-900 text-xs">SISTEMA SAP</strong><br>Módulo MM / PP Control
+                            </div>
+                            <div class="bg-gradient-to-r from-blue-600 to-sky-500 text-white font-black text-2xl px-3.5 py-1 rounded-lg shadow-sm tracking-wider">SAP</div>
+                        </div>
+                    </div>
+
+                    <!-- METADATOS DE LA REQUISICIÓN -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-lg border border-slate-200 mt-5 mb-6 text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase font-bold">Folio Requisición:</span>
+                            <strong id="rep-folio" class="text-slate-900 font-mono-code text-sm">--</strong>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase font-bold">Modelo Solicitante:</span>
+                            <strong id="rep-modelo" class="text-blue-700 font-black text-sm">MX5A</strong>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase font-bold">Fecha & Hora:</span>
+                            <span id="rep-fecha" class="text-slate-800 font-semibold">--/--/---- --:--</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase font-bold">Estatus del Ciclo:</span>
+                            <span id="rep-status" class="font-bold text-amber-600">Sin orden seleccionada</span>
+                        </div>
+                    </div>
+
+                    <!-- TABLA DE MATERIALES -->
+                    <div class="border border-slate-300 rounded-lg overflow-hidden mb-5">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 border-b border-slate-300 font-bold uppercase text-[11px]">
+                                    <th class="py-2.5 px-3 border-r border-slate-300 w-12 text-center">No.</th>
+                                    <th class="py-2.5 px-3 border-r border-slate-300 w-44">Número de Parte</th>
+                                    <th class="py-2.5 px-3 border-r border-slate-300">Descripción del Artículo</th>
+                                    <th class="py-2.5 px-3 text-right w-28">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rep-items-tbody" class="divide-y divide-slate-200 text-xs">
+                                <tr>
+                                    <td colspan="4" class="py-8 text-center text-slate-400 italic">No hay artículos cargados en la vista previa del reporte.</td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-100 border-t-2 border-slate-800 font-bold text-xs">
+                                    <td colspan="3" class="py-2.5 px-3 text-right uppercase tracking-wider text-slate-900">Total de Piezas Solicitadas:</td>
+                                    <td id="rep-total-qty" class="py-2.5 px-3 text-right font-black text-base text-slate-900 font-mono-code">0</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <!-- RESUMEN DE TIEMPOS -->
+                    <div class="bg-blue-50/70 p-3.5 rounded-lg border border-blue-200 text-xs flex flex-wrap justify-between items-center gap-2">
+                        <div>
+                            <span class="text-blue-950 font-bold block">Control de Tiempos Operativos:</span>
+                            <span class="text-slate-600 text-[11px]">F1: Tolerancia Revisión (3m) &bull; F2: Recolección Almacén (5m) &bull; F3: Entrega a Línea (5m)</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] text-slate-500 uppercase font-bold">Lead Time Total:</span>
+                            <span id="rep-lead-time" class="block font-black text-blue-900 font-mono-code text-sm">--:-- min</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN DE 3 FIRMAS -->
+                <div class="pt-8 border-t-2 border-slate-200 mt-10">
+                    <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-8 text-center">Firmas de Control y Validación en Piso</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center text-xs">
+                        
+                        <!-- FIRMA 1: MATERIALISTA MX5A -->
+                        <div class="flex flex-col justify-end space-y-1">
+                            <div class="h-12 flex items-center justify-center font-signature text-2xl text-blue-800">
+                                Materialista MX5A
+                            </div>
+                            <div class="border-t border-slate-800 pt-1.5">
+                                <strong class="block text-slate-900">Materialista MX5A</strong>
+                                <span class="text-[10px] text-slate-500">Solicitante en Línea</span>
+                            </div>
+                        </div>
+
+                        <!-- FIRMA 2: SURTIDOR DE ALMACÉN -->
+                        <div class="flex flex-col justify-end space-y-1">
+                            <div id="rep-sign-almacen" class="h-12 flex items-center justify-center font-signature text-2xl text-slate-400">
+                                <span class="text-xs font-sans italic">Pendiente de surtir</span>
+                            </div>
+                            <div class="border-t border-slate-800 pt-1.5">
+                                <strong class="block text-slate-900">Surtidor de Almacén</strong>
+                                <span id="rep-time-almacen" class="text-[10px] text-slate-500">Recolección de Material</span>
+                            </div>
+                        </div>
+
+                        <!-- FIRMA 3: RECIBIDO EN LÍNEA (RELOJ 10587) -->
+                        <div class="flex flex-col justify-end space-y-1">
+                            <div id="rep-sign-linea" class="h-12 flex items-center justify-center font-signature text-2xl text-emerald-800">
+                                <span class="text-slate-400 italic text-xs font-sans">Pendiente de entrega</span>
+                            </div>
+                            <div class="border-t border-slate-800 pt-1.5">
+                                <strong id="rep-reloj-tag" class="block text-slate-900">Recibido en Línea</strong>
+                                <span id="rep-time-linea" class="text-[10px] text-slate-500">Validado por No. de Reloj</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </article>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VISTA 4: HISTORIAL & DATOS                 -->
+        <!-- ========================================== -->
+        <section id="view-historial" class="hidden space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center pb-3 border-b border-slate-200 gap-3">
+                <div>
+                    <h2 class="text-xl font-extrabold text-slate-900">Historial de Movimientos & Auditoría</h2>
+                    <p class="text-xs text-slate-500">Registro persistente en navegador (localStorage) de todas las requisiciones completadas y en curso.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="limpiarHistorial()" class="px-3.5 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span>Limpiar Historial</span>
+                    </button>
+                    <button onclick="exportarCSVLocal()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-csv"></i>
+                        <span>Exportar CSV (Excel)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- TABLA HISTORIAL -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600 border-b border-slate-200 uppercase font-bold text-[11px]">
+                                <th class="py-3 px-4">Folio</th>
+                                <th class="py-3 px-4">Modelo</th>
+                                <th class="py-3 px-4">Piezas</th>
+                                <th class="py-3 px-4">Hora Solicitud</th>
+                                <th class="py-3 px-4">Hora Impresión</th>
+                                <th class="py-3 px-4">Entrega Línea</th>
+                                <th class="py-3 px-4">Reloj Receptor</th>
+                                <th class="py-3 px-4">Lead Time Total</th>
+                                <th class="py-3 px-4 text-right">Reporte</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historial-tbody" class="divide-y divide-slate-100 font-mono-code">
+                            <tr>
+                                <td colspan="9" class="py-8 text-center text-slate-400 font-sans">No hay movimientos guardados aún.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL: CONFIRMACIÓN DE ENTREGA CON NÚMERO DE RELOJ (10587) -->
+    <div id="modal-confirm-entrega" class="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-200">
+            <div class="text-center">
+                <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center text-xl font-bold mb-2">
+                    <i class="fa-solid fa-id-badge"></i>
+                </div>
+                <h3 class="text-lg font-extrabold text-slate-900">Confirmar Entrega en Línea</h3>
+                <p id="modal-entrega-subtitle" class="text-xs text-slate-500 mt-1">Ingrese su número de reloj autorizado para cerrar el ciclo de entrega.</p>
+            </div>
+
+            <div class="space-y-2">
+                <label for="input-reloj" class="block text-xs font-bold text-slate-700">Número de Reloj Autorizado:</label>
+                <input type="text" id="input-reloj" placeholder="Ingrese 10587" maxlength="10" class="w-full px-4 py-2.5 border-2 border-slate-300 rounded-xl text-center font-mono-code text-lg font-black tracking-widest focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                <p id="error-reloj" class="text-xs text-rose-600 font-bold hidden text-center">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Número de reloj no autorizado. Use: 10587
+                </p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button onclick="cerrarModalEntrega()" class="py-2.5 text-xs font-bold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Cancelar</button>
+                <button onclick="ejecutarEntregaReloj()" class="py-2.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow transition">Confirmar Entrega ✓</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LÓGICA DE LA APLICACIÓN -->
+    <script>
+        // RELOJ AUTORIZADO PARA RECEPCIÓN
+        const AUTHORIZED_BADGES = ["10587"];
+        const STORAGE_KEY = "hans_sap_requisiciones_clean_v1";
+
+        // ESTADO INICIAL LIMPIO (SIN NÚMEROS DE PARTE PRECARGADOS)
+        let customPartsList = []; // { code, desc, qty, checked }
+        let currentOrders = [];
+        let selectedReportOrderId = null;
+        let isMX5AOpen = false;
+
+        // TIEMPOS EN SEGUNDOS (F1: 3m, F2: 5m, F3: 5m)
+        const SEC_F1 = 180;
+        const SEC_F2 = 300;
+        const SEC_F3 = 300;
+
+        // INICIALIZACIÓN
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) currentOrders = JSON.parse(saved);
+            } catch (e) {
+                currentOrders = [];
+            }
+
+            if (currentOrders.length > 0) {
+                selectedReportOrderId = currentOrders[currentOrders.length - 1].id;
+            }
+
+            renderCustomPartsList();
+            renderOrdersTable();
+            renderHistorialTable();
+            updateKPIs();
+            updateMX5ADeliveryState();
+            updateReportDropdown();
+            if (selectedReportOrderId) {
+                loadOrderInReport(selectedReportOrderId);
+            }
+
+            setInterval(updateProgressTimers, 1000);
+        });
+
+        function saveToStorage() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentOrders));
+        }
+
+        // NAVEGACIÓN ENTRE PESTAÑAS
+        function switchTab(tab) {
+            ['modelos', 'almacen', 'reporte', 'historial'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`nav-btn-${t}`);
+                btn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800 relative";
+            });
+
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`nav-btn-${tab}`);
+            activeBtn.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 bg-blue-600 text-white shadow relative";
+
+            if (tab === 'reporte' && selectedReportOrderId) {
+                loadOrderInReport(selectedReportOrderId);
+            }
+        }
+
+        // === 1. GESTIÓN DE MODELO MX5A (SIN PARTES PRECARGADAS) ===
+        function toggleCardMX5A(action) {
+            const sec = document.getElementById('mx5a-expanded-section');
+            const btn = document.getElementById('btn-toggle-mx5a');
+
+            if (action === 'close') {
+                isMX5AOpen = false;
+                sec.classList.add('hidden');
+                btn.textContent = 'Abrir';
+                btn.classList.replace('bg-slate-700', 'bg-blue-600');
+            } else {
+                isMX5AOpen = !isMX5AOpen;
+                if (isMX5AOpen) {
+                    sec.classList.remove('hidden');
+                    btn.textContent = 'Ocultar';
+                    btn.classList.replace('bg-blue-600', 'bg-slate-700');
+                    document.getElementById('input-new-code').focus();
+                } else {
+                    sec.classList.add('hidden');
+                    btn.textContent = 'Abrir';
+                    btn.classList.replace('bg-slate-700', 'bg-blue-600');
+                }
+            }
+        }
+
+        function agregarParteManual() {
+            const codeEl = document.getElementById('input-new-code');
+            const descEl = document.getElementById('input-new-desc');
+            const qtyEl = document.getElementById('input-new-qty');
+
+            const code = codeEl.value.trim().toUpperCase();
+            const desc = descEl.value.trim() || 'Componente de Ensamble MX5A';
+            const qty = parseInt(qtyEl.value, 10) || 1;
+
+            if (!code) {
+                showToast('Dato Requerido', 'Ingrese un Número de Parte antes de agregar.');
+                codeEl.focus();
+                return;
+            }
+
+            // Verificar si ya existe para sumar cantidad
+            const existing = customPartsList.find(p => p.code === code);
+            if (existing) {
+                existing.qty += qty;
+                existing.checked = true;
+            } else {
+                customPartsList.push({ code, desc, qty, checked: true });
+            }
+
+            codeEl.value = '';
+            descEl.value = '';
+            qtyEl.value = '10';
+            codeEl.focus();
+
+            renderCustomPartsList();
+            showToast('Material Agregado', `${code} (${qty} pzs) añadido a la lista.`);
+        }
+
+        function simularPedidoDemo() {
+            if (!isMX5AOpen) toggleCardMX5A('toggle');
+            customPartsList = [
+                { code: 'PART-MX5A-001', desc: 'Arnés Principal Tablero RH', qty: 25, checked: true },
+                { code: 'PART-MX5A-002', desc: 'Protector Térmico 260mm', qty: 50, checked: true },
+                { code: 'PART-MX5A-003', desc: 'Clip Sujeción Cabina 50mm', qty: 100, checked: true }
+            ];
+            renderCustomPartsList();
+            showToast('Datos Simulados', 'Se cargaron 3 materiales de ejemplo. Pulse Guardar y Enviar a Almacén.');
+        }
+
+        function renderCustomPartsList() {
+            const ul = document.getElementById('mx5a-parts-list');
+            const badge = document.getElementById('mx5a-badge-count');
+            badge.textContent = `${customPartsList.length} Partes`;
+
+            if (customPartsList.length === 0) {
+                ul.innerHTML = `
+                    <li id="mx5a-empty-list" class="py-6 text-center text-slate-400 text-xs italic">
+                        Lista vacía. Agregue un número de parte arriba o pulse "Simular Datos de Prueba".
+                    </li>`;
+                recalcSelectionCounters();
+                return;
+            }
+
+            ul.innerHTML = '';
+            customPartsList.forEach((item, idx) => {
+                const li = document.createElement('li');
+                li.className = "part-item-row flex items-center justify-between gap-2 p-2 hover:bg-blue-50/50 transition text-xs";
+                li.setAttribute('data-search', `${item.code.toLowerCase()} ${item.desc.toLowerCase()}`);
+                li.innerHTML = `
+                    <label class="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="togglePartCheck(${idx}, this.checked)" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                        <div class="truncate">
+                            <strong class="block text-slate-900 font-mono-code text-[11px]">${item.code}</strong>
+                            <span class="text-[10px] text-slate-500 block truncate">${item.desc}</span>
+                        </div>
+                    </label>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <input type="number" min="1" value="${item.qty}" onchange="updatePartQty(${idx}, this.value)" class="w-16 text-center py-1 text-xs border border-slate-300 rounded-md font-mono-code font-bold focus:ring-1 focus:ring-blue-500 focus:outline-none">
+                        <button onclick="removePartItem(${idx})" class="text-slate-400 hover:text-rose-600 px-1" title="Eliminar">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `;
+                ul.appendChild(li);
+            });
+
+            recalcSelectionCounters();
+        }
+
+        function togglePartCheck(idx, checked) {
+            customPartsList[idx].checked = checked;
+            recalcSelectionCounters();
+        }
+
+        function updatePartQty(idx, val) {
+            const q = parseInt(val, 10);
+            customPartsList[idx].qty = q > 0 ? q : 1;
+            recalcSelectionCounters();
+        }
+
+        function removePartItem(idx) {
+            customPartsList.splice(idx, 1);
+            renderCustomPartsList();
+        }
+
+        function recalcSelectionCounters() {
+            const selected = customPartsList.filter(p => p.checked);
+            const totalPieces = selected.reduce((sum, p) => sum + p.qty, 0);
+            document.getElementById('lbl-selected-count').textContent = selected.length;
+            document.getElementById('lbl-total-pieces').textContent = totalPieces;
+        }
+
+        function filterParts() {
+            const q = document.getElementById('mx5a-search-input').value.toLowerCase();
+            document.querySelectorAll('.part-item-row').forEach(li => {
+                const txt = li.getAttribute('data-search') || '';
+                li.style.display = txt.includes(q) ? 'flex' : 'none';
+            });
+        }
+
+        function guardarSeleccionMX5A() {
+            const selected = customPartsList.filter(p => p.checked);
+            if (selected.length === 0) {
+                showToast('Selección Vacía', 'Agregue y marque al menos un número de parte.');
+                if (!isMX5AOpen) toggleCardMX5A('toggle');
+                return;
+            }
+
+            const btnSave = document.getElementById('btn-save-mx5a');
+            btnSave.textContent = 'Guardado ✓';
+            btnSave.classList.replace('bg-emerald-600', 'bg-slate-800');
+
+            const btnSend = document.getElementById('btn-enviar-almacen');
+            btnSend.disabled = false;
+            btnSend.classList.remove('opacity-40', 'cursor-not-allowed');
+            btnSend.classList.add('hover:bg-amber-600');
+
+            showToast('Lista Guardada', 'El botón "Enviar a Almacén" ha sido habilitado.');
+
+            setTimeout(() => {
+                btnSave.textContent = 'Guardar';
+                btnSave.classList.replace('bg-slate-800', 'bg-emerald-600');
+            }, 1800);
+        }
+
+        function enviarAlmacenMX5A() {
+            const selected = customPartsList.filter(p => p.checked);
+            if (selected.length === 0) return;
+
+            const folio = `ORD-${String(currentOrders.length + 1).padStart(4, '0')}`;
+            const now = new Date();
+
+            const newOrder = {
+                id: folio,
+                model: 'MX5A',
+                createdAt: now.toISOString(),
+                printedAt: null,
+                deliveredAt: null,
+                deliveredBy: null,
+                status: 'Pendiente',
+                items: selected.map(s => ({ code: s.code, desc: s.desc, qty: s.qty })),
+                totalPieces: selected.reduce((acc, s) => acc + s.qty, 0),
+                leadTimeSec: null
+            };
+
+            currentOrders.push(newOrder);
+            selectedReportOrderId = newOrder.id;
+            saveToStorage();
+
+            // Limpiar lista MX5A
+            customPartsList = [];
+            renderCustomPartsList();
+            toggleCardMX5A('close');
+
+            const btnSend = document.getElementById('btn-enviar-almacen');
+            btnSend.disabled = true;
+            btnSend.classList.add('opacity-40', 'cursor-not-allowed');
+            btnSend.classList.remove('hover:bg-amber-600');
+
+            // Actualizar vistas
+            updateMX5ADeliveryState();
+            renderOrdersTable();
+            renderHistorialTable();
+            updateKPIs();
+            updateReportDropdown();
+            loadOrderInReport(newOrder.id);
+
+            showToast('Pedido Enviado', `Requisición ${folio} enviada al Panel de Almacén.`);
+            setTimeout(() => switchTab('almacen'), 500);
+        }
+
+        function updateMX5ADeliveryState() {
+            const box = document.getElementById('mx5a-delivery-box');
+            const activeOrder = [...currentOrders].reverse().find(o => o.status !== 'Entregado');
+
+            if (activeOrder) {
+                box.classList.remove('hidden');
+                document.getElementById('lbl-active-order-id').textContent = `#${activeOrder.id}`;
+                document.getElementById('lbl-active-order-status').textContent = activeOrder.status;
+            } else {
+                box.classList.add('hidden');
+            }
+        }
+
+        // === 2. TABLA DE PEDIDOS ALMACÉN & BARRA 3 TONOS DE AZUL ===
+        function renderOrdersTable() {
+            const tbody = document.getElementById('almacen-orders-tbody');
+            tbody.innerHTML = '';
+
+            if (currentOrders.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-10 text-center text-slate-400">
+                            <i class="fa-solid fa-inbox text-3xl mb-2 block opacity-40"></i>
+                            No hay pedidos registrados. Cree una solicitud en "1. Modelos".
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            [...currentOrders].reverse().forEach(o => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+
+                const isPrinted = o.printedAt !== null;
+                const isDelivered = o.deliveredAt !== null;
+
+                let badgeClass = "bg-amber-100 text-amber-800";
+                if (isDelivered) badgeClass = "bg-emerald-100 text-emerald-800";
+                else if (isPrinted) badgeClass = "bg-blue-100 text-blue-800";
+
+                tr.innerHTML = `
+                    <td class="py-3.5 px-4 font-bold font-mono-code text-blue-700">${o.id}</td>
+                    <td class="py-3.5 px-4 font-extrabold text-slate-800">${o.model}</td>
+                    <td class="py-3.5 px-4 font-mono-code text-slate-600">${o.items.length} partes (${o.totalPieces} pzs)</td>
+                    <td class="py-3.5 px-4">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">${o.status}</span>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-semibold">
+                                <span id="label-fase-${o.id}" class="text-slate-600">Calculando...</span>
+                                <span id="timer-${o.id}" class="font-mono-code text-slate-900">00:00</span>
+                            </div>
+                            <!-- BARRA PROPORCIONAL 3 TONOS DE AZUL (3m / 5m / 5m) -->
+                            <div class="w-full h-3 bg-slate-200 rounded-full flex overflow-hidden p-0.5 gap-0.5">
+                                <div class="flex-[3] bg-slate-200 rounded-l overflow-hidden" title="Fase 1: Revisión (3 min)">
+                                    <div id="bar-f1-${o.id}" class="h-full bg-sky-300 w-0 transition-all duration-500"></div>
+                                </div>
+                                <div class="flex-[5] bg-slate-200 overflow-hidden" title="Fase 2: Recolección Almacén (5 min)">
+                                    <div id="bar-f2-${o.id}" class="h-full bg-blue-500 w-0 transition-all duration-500"></div>
+                                </div>
+                                <div class="flex-[5] bg-slate-200 rounded-r overflow-hidden" title="Fase 3: Entrega a Línea (5 min)">
+                                    <div id="bar-f3-${o.id}" class="h-full bg-blue-900 w-0 transition-all duration-500"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="py-3.5 px-4 text-right space-x-1.5">
+                        <button onclick="verReporteOrden('${o.id}')" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Ver Vista Previa">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button onclick="imprimirDesdeTabla('${o.id}')" ${isPrinted ? 'disabled' : ''} class="px-3 py-1.5 text-xs font-bold rounded-lg transition ${isPrinted ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'}">
+                            ${isPrinted ? 'Impreso ✓' : '<i class="fa-solid fa-print mr-1"></i> Imprimir'}
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            updateProgressTimers();
+        }
+
+        function updateProgressTimers() {
+            const now = new Date();
+
+            currentOrders.forEach(o => {
+                const f1Bar = document.getElementById(`bar-f1-${o.id}`);
+                const f2Bar = document.getElementById(`bar-f2-${o.id}`);
+                const f3Bar = document.getElementById(`bar-f3-${o.id}`);
+                const label = document.getElementById(`label-fase-${o.id}`);
+                const timer = document.getElementById(`timer-${o.id}`);
+
+                if (!f1Bar || !f2Bar || !f3Bar || !label || !timer) return;
+
+                const created = new Date(o.createdAt);
+                const printed = o.printedAt ? new Date(o.printedAt) : null;
+                const delivered = o.deliveredAt ? new Date(o.deliveredAt) : null;
+
+                if (delivered) {
+                    f1Bar.style.width = '100%';
+                    f2Bar.style.width = '100%';
+                    f3Bar.style.width = '100%';
+                    label.textContent = `Entregado (Reloj #${o.deliveredBy})`;
+                    label.className = "text-emerald-700 font-bold";
+                    timer.textContent = formatSec(o.leadTimeSec || 0);
+                } else if (printed) {
+                    f1Bar.style.width = '100%';
+                    const elapsedSec = Math.floor((now - printed) / 1000);
+
+                    if (elapsedSec <= SEC_F2) {
+                        const pct = Math.min(100, (elapsedSec / SEC_F2) * 100);
+                        f2Bar.style.width = `${pct}%`;
+                        f3Bar.style.width = '0%';
+                        label.textContent = 'F2: Recolección Almacén';
+                        label.className = "text-blue-600 font-bold";
+                        timer.textContent = formatSec(SEC_F2 - elapsedSec);
+                    } else {
+                        f2Bar.style.width = '100%';
+                        const transitSec = elapsedSec - SEC_F2;
+                        const pct = Math.min(100, (transitSec / SEC_F3) * 100);
+                        f3Bar.style.width = `${pct}%`;
+                        label.textContent = 'F3: Entrega a Línea';
+                        label.className = "text-blue-900 font-bold";
+                        timer.textContent = formatSec(Math.max(0, SEC_F3 - transitSec));
+                    }
+                } else {
+                    const elapsedSec = Math.floor((now - created) / 1000);
+                    const pct = Math.min(100, (elapsedSec / SEC_F1) * 100);
+                    f1Bar.style.width = `${pct}%`;
+                    f2Bar.style.width = '0%';
+                    f3Bar.style.width = '0%';
+                    label.textContent = 'F1: Tolerancia Revisión';
+                    label.className = "text-amber-700 font-bold";
+                    timer.textContent = formatSec(Math.max(0, SEC_F1 - elapsedSec));
+                }
+            });
+        }
+
+        function formatSec(sec) {
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        // === 3. REPORTE E IMPRESIÓN ÚNICA ===
+        function verReporteOrden(orderId) {
+            selectedReportOrderId = orderId;
+            loadOrderInReport(orderId);
+            switchTab('reporte');
+        }
+
+        function imprimirDesdeTabla(orderId) {
+            const order = currentOrders.find(o => o.id === orderId);
+            if (!order || order.printedAt) return;
+
+            order.printedAt = new Date().toISOString();
+            order.status = 'En Proceso';
+            saveToStorage();
+
+            selectedReportOrderId = orderId;
+            renderOrdersTable();
+            renderHistorialTable();
+            updateKPIs();
+            updateMX5ADeliveryState();
+            loadOrderInReport(orderId);
+            switchTab('reporte');
+
+            setTimeout(() => {
+                window.print();
+            }, 350);
+        }
+
+        function ejecutarImpresionDesdeReporte() {
+            if (!selectedReportOrderId) {
+                showToast('Sin Orden', 'No hay ninguna requisición seleccionada para imprimir.');
+                return;
+            }
+            const order = currentOrders.find(o => o.id === selectedReportOrderId);
+            if (!order) return;
+
+            if (!order.printedAt) {
+                order.printedAt = new Date().toISOString();
+                order.status = 'En Proceso';
+                saveToStorage();
+                renderOrdersTable();
+                renderHistorialTable();
+                updateKPIs();
+                updateMX5ADeliveryState();
+                loadOrderInReport(order.id);
+            }
+
+            window.print();
+        }
+
+        function updateReportDropdown() {
+            const sel = document.getElementById('select-report-order');
+            if (currentOrders.length === 0) {
+                sel.innerHTML = '<option value="">-- Sin órdenes --</option>';
+                return;
+            }
+            sel.innerHTML = '';
+            [...currentOrders].reverse().forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = `${o.id} - ${o.model} (${o.totalPieces} pzs)`;
+                sel.appendChild(opt);
+            });
+            if (selectedReportOrderId) sel.value = selectedReportOrderId;
+        }
+
+        function loadOrderInReport(orderId) {
+            if (!orderId) return;
+            selectedReportOrderId = orderId;
+            const order = currentOrders.find(o => o.id === orderId);
+            if (!order) return;
+
+            document.getElementById('select-report-order').value = orderId;
+            document.getElementById('rep-folio').textContent = order.id;
+            document.getElementById('rep-modelo').textContent = order.model;
+            document.getElementById('rep-fecha').textContent = new Date(order.createdAt).toLocaleString();
+            document.getElementById('rep-status').textContent = order.status;
+
+            // Tabla de artículos
+            const tbody = document.getElementById('rep-items-tbody');
+            tbody.innerHTML = '';
+            order.items.forEach((it, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-2 px-3 border-r border-slate-300 text-center font-mono-code text-slate-500">${i + 1}</td>
+                    <td class="py-2 px-3 border-r border-slate-300 font-mono-code font-bold text-slate-900">${it.code}</td>
+                    <td class="py-2 px-3 border-r border-slate-300 text-slate-700">${it.desc}</td>
+                    <td class="py-2 px-3 text-right font-mono-code font-black text-slate-900">${it.qty}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('rep-total-qty').textContent = order.totalPieces;
+
+            // Firma 2: Almacén
+            const signAlm = document.getElementById('rep-sign-almacen');
+            const timeAlm = document.getElementById('rep-time-almacen');
+            if (order.printedAt) {
+                signAlm.innerHTML = `<span class="text-blue-800">Surtidor de Almacén</span>`;
+                timeAlm.textContent = `Impreso: ${new Date(order.printedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            } else {
+                signAlm.innerHTML = `<span class="text-xs font-sans italic text-slate-400">Pendiente de surtir</span>`;
+                timeAlm.textContent = `Recolección de Material`;
+            }
+
+            // Firma 3: Recibido en Línea (Reloj 10587)
+            const signLin = document.getElementById('rep-sign-linea');
+            const tagLin = document.getElementById('rep-reloj-tag');
+            const timeLin = document.getElementById('rep-time-linea');
+            const leadEl = document.getElementById('rep-lead-time');
+
+            if (order.deliveredAt) {
+                signLin.innerHTML = `<span class="text-emerald-800">Reloj #${order.deliveredBy}</span>`;
+                tagLin.textContent = `Recibido: Reloj #${order.deliveredBy}`;
+                timeLin.textContent = `Hora: ${new Date(order.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                leadEl.textContent = `${formatSec(order.leadTimeSec || 0)} min`;
+            } else {
+                signLin.innerHTML = `<span class="text-slate-400 italic text-xs font-sans">Pendiente de entrega</span>`;
+                tagLin.textContent = `Recibido en Línea`;
+                timeLin.textContent = `Validado por No. de Reloj`;
+                leadEl.textContent = `--:-- min`;
+            }
+
+            // Estado del botón imprimir en barra superior
+            const btnPrint = document.getElementById('btn-print-report');
+            const lblPrint = document.getElementById('lbl-btn-print');
+            if (order.printedAt) {
+                lblPrint.textContent = 'Reimprimir Copia';
+                btnPrint.className = "px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shadow transition flex items-center gap-2";
+            } else {
+                lblPrint.textContent = 'Imprimir Reporte';
+                btnPrint.className = "px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition flex items-center gap-2";
+            }
+        }
+
+        // === 4. MODAL ENTREGA & VALIDACIÓN DE RELOJ 10587 ===
+        function abrirModalEntrega() {
+            const activeOrder = [...currentOrders].reverse().find(o => o.status !== 'Entregado');
+            if (!activeOrder) return;
+
+            document.getElementById('modal-entrega-subtitle').textContent = `Orden #${activeOrder.id} (${activeOrder.totalPieces} piezas) - Ingrese su No. de Reloj.`;
+            document.getElementById('input-reloj').value = '';
+            document.getElementById('error-reloj').classList.add('hidden');
+
+            const modal = document.getElementById('modal-confirm-entrega');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.getElementById('input-reloj').focus();
+        }
+
+        function cerrarModalEntrega() {
+            const modal = document.getElementById('modal-confirm-entrega');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function ejecutarEntregaReloj() {
+            const badge = document.getElementById('input-reloj').value.trim();
+            const errEl = document.getElementById('error-reloj');
+
+            if (!AUTHORIZED_BADGES.includes(badge)) {
+                errEl.classList.remove('hidden');
+                document.getElementById('input-reloj').focus();
+                return;
+            }
+
+            const activeOrder = [...currentOrders].reverse().find(o => o.status !== 'Entregado');
+            if (!activeOrder) {
+                cerrarModalEntrega();
+                return;
+            }
+
+            const now = new Date();
+            activeOrder.deliveredAt = now.toISOString();
+            activeOrder.deliveredBy = badge;
+            activeOrder.status = 'Entregado';
+            activeOrder.leadTimeSec = Math.floor((now - new Date(activeOrder.createdAt)) / 1000);
+
+            saveToStorage();
+            cerrarModalEntrega();
+
+            updateMX5ADeliveryState();
+            renderOrdersTable();
+            renderHistorialTable();
+            updateKPIs();
+            loadOrderInReport(activeOrder.id);
+
+            showToast('Entrega Confirmada', `Orden #${activeOrder.id} recibida en línea por Reloj #${badge}.`);
+        }
+
+        // === 5. HISTORIAL & EXPORTACIÓN CSV ===
+        function renderHistorialTable() {
+            const tbody = document.getElementById('historial-tbody');
+            document.getElementById('nav-badge-historial').textContent = currentOrders.length;
+
+            if (currentOrders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-slate-400 font-sans">No hay movimientos guardados aún.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            [...currentOrders].reverse().forEach(o => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-blue-700">${o.id}</td>
+                    <td class="py-3 px-4 font-sans font-bold text-slate-800">${o.model}</td>
+                    <td class="py-3 px-4">${o.totalPieces} pzs</td>
+                    <td class="py-3 px-4 text-slate-500">${new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                    <td class="py-3 px-4 text-slate-500">${o.printedAt ? new Date(o.printedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--'}</td>
+                    <td class="py-3 px-4 text-slate-500">${o.deliveredAt ? new Date(o.deliveredAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--'}</td>
+                    <td class="py-3 px-4 font-bold ${o.deliveredBy ? 'text-emerald-700' : 'text-slate-400'}">${o.deliveredBy ? '#' + o.deliveredBy : 'Pendiente'}</td>
+                    <td class="py-3 px-4 font-bold text-slate-800">${o.leadTimeSec !== null ? formatSec(o.leadTimeSec) : '--:--'}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="verReporteOrden('${o.id}')" class="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-sans font-bold text-[11px] transition">
+                            Ver
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateKPIs() {
+            const pendientes = currentOrders.filter(o => o.status === 'Pendiente').length;
+            const proceso = currentOrders.filter(o => o.status === 'En Proceso').length;
+            const completados = currentOrders.filter(o => o.status === 'Entregado').length;
+
+            document.getElementById('kpi-pendientes').textContent = pendientes;
+            document.getElementById('kpi-proceso').textContent = proceso;
+            document.getElementById('kpi-completados').textContent = completados;
+
+            const navBadge = document.getElementById('nav-badge-pendientes');
+            if (pendientes > 0) {
+                navBadge.textContent = pendientes;
+                navBadge.classList.remove('hidden');
+            } else {
+                navBadge.classList.add('hidden');
+            }
+        }
+
+        function exportarCSVLocal() {
+            if (currentOrders.length === 0) {
+                showToast('Sin Datos', 'No hay registros en el historial para exportar.');
+                return;
+            }
+            let csv = "\uFEFF";
+            csv += "Folio,Modelo,Estatus,Partes,Total Piezas,Hora Solicitud,Hora Impresion,Hora Entrega,Reloj Receptor,Lead Time (seg)\n";
+            currentOrders.forEach(o => {
+                csv += `"${o.id}","${o.model}","${o.status}",${o.items.length},${o.totalPieces},"${o.createdAt}","${o.printedAt || ''}","${o.deliveredAt || ''}","${o.deliveredBy || ''}",${o.leadTimeSec || ''}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `Reporte_Requisiciones_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            showToast('CSV Descargado', 'El archivo de historial se ha exportado correctamente.');
+        }
+
+        function limpiarHistorial() {
+            if (currentOrders.length === 0) return;
+            currentOrders = [];
+            selectedReportOrderId = null;
+            saveToStorage();
+            renderOrdersTable();
+            renderHistorialTable();
+            updateKPIs();
+            updateMX5ADeliveryState();
+            updateReportDropdown();
+            showToast('Historial Reiniciado', 'Todos los registros han sido eliminados.');
+        }
+
+        // NOTIFICACIONES TOAST
+        function showToast(title, desc) {
+            const toast = document.getElementById('toast-notification');
+            document.getElementById('toast-title').textContent = title;
+            document.getElementById('toast-desc').textContent = desc;
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(hideToast, 4000);
+        }
+
+        function hideToast() {
+            const toast = document.getElementById('toast-notification');
+            toast.classList.remove('translate-y-0', 'opacity-100');
+            toast.classList.add('translate-y-24', 'opacity-0');
+        }
+    </script>
+</body>
+</html>
